@@ -1,9 +1,10 @@
+
 pipeline {
   agent none
 
   environment {
     IMAGE_NAME = "java-maven-app"
-    IMAGE_TAG = "latest"
+    IMAGE_TAG = "${BUILD_NUMBER}"
     CONTAINER_NAME = "java-app-container"
   }
 
