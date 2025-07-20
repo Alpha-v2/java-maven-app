@@ -1,0 +1,78 @@
+pipeline {
+  agent none
+
+  environment {
+    IMAGE_NAME = "java-maven-app"
+    IMAGE_TAG = "latest"
+    CONTAINER_NAME = "java-app-container"
+  }
+
+  stages {
+    stage('Build') {
+      agent {
+        docker {
+          image 'maven:3.9-eclipse-temurin-17'
+          args '-v $HOME/.m2:/root/.m2'
+        }
+      }
+      steps {
+        sh 'mvn clean package -DskipTests'
+      }
+    }
+
+    stage('Test') {
+      agent {
+        docker {
+          image 'maven:3.9-eclipse-temurin-17'
+        }
+      }
+      steps {
+        sh 'mvn test'
+      }
+      post {
+        always {
+          junit '**/target/surefire-reports/*.xml'
+        }
+      }
+    }
+
+    stage('Build Docker Image') {
+      agent {
+        docker {
+          image 'docker:25.0-cli'
+          args '--privileged -v /var/run/docker.sock:/var/run/docker.sock'
+        }
+      }
+      steps {
+        sh 'docker build -t $IMAGE_NAME:$IMAGE_TAG .'
+      }
+    }
+
+    stage('Deploy Docker Container') {
+      agent {
+        docker {
+          image 'docker:25.0-cli'
+          args '--privileged -v /var/run/docker.sock:/var/run/docker.sock'
+        }
+      }
+      steps {
+        script {
+          // Stop and remove old container if running
+          sh """
+            docker stop $CONTAINER_NAME || true
+            docker rm $CONTAINER_NAME || true
+
+            docker run -d --name $CONTAINER_NAME -p 8080:8080 $IMAGE_NAME:$IMAGE_TAG
+          """
+        }
+      }
+    }
+  }
+
+  post {
+    failure {
+      echo "Build failed. Sending notification..."
+      // mail or Slack notifications can go here
+    }
+  }
+}
